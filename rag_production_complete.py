@@ -1,10 +1,6 @@
-# ============================================================
-#   PRODUCTION RAG APPLICATION — "Ask My Docs"
-#   Components: Hybrid Retrieval + Reranking + Citations
-#               + RAGAS Evaluation + Gradio UI
-# ============================================================
 
-# ── STEP 0: Install all dependencies ────────────────────────
+
+#  Installing all dependencies ────────────────────────
 import subprocess, sys
 
 def install(pkg):
@@ -16,15 +12,15 @@ for package in [
     "ragas",
     "datasets",
     "langchain",
-    "langchain-google-genai",   # ✅ replaces langchain-community for Gemini
-    "google-genai",             # ✅ new Google Gemini SDK
+    "langchain-google-genai",   
+    "google-genai",            
     "sentence-transformers",
     "qdrant-client[fastembed]",
     "cohere"
 ]:
     install(package)
 
-# ── STEP 1: Imports ─────────────────────────────────────────
+#  Imports 
 import os, uuid, io, time, json
 from google.colab import userdata
 from qdrant_client import QdrantClient
@@ -33,11 +29,11 @@ import cohere
 import gradio as gr
 import pypdf
 
-# ── STEP 2: API Keys ────────────────────────────────────────
+#  API Keys 
 os.environ["COHERE_API_KEY"] = userdata.get("COHERE_API_KEY")
-GEMINI_KEY                   = userdata.get("OPENAI_API_KEY")   # your Gemini key
+GEMINI_KEY                   = userdata.get("OPENAI_API_KEY")   
 
-# ✅ RAGAS needs this env variable name to find Gemini
+
 os.environ["GOOGLE_API_KEY"] = GEMINI_KEY
 
 cohere_client = cohere.ClientV2(api_key=os.environ["COHERE_API_KEY"])
@@ -45,7 +41,7 @@ gemini_client = genai.Client(api_key=GEMINI_KEY)
 
 COLLECTION_NAME = "production_rag_docs"
 
-# ── STEP 3: Qdrant Vector Store ──────────────────────────────
+# Qdrant Vector Store 
 qdrant = QdrantClient(location=":memory:")
 qdrant.set_model("BAAI/bge-small-en-v1.5")
 qdrant.set_sparse_model("prithivida/Splade_PP_en_v1")
@@ -56,7 +52,7 @@ qdrant.create_collection(
     sparse_vectors_config=qdrant.get_fastembed_sparse_vector_params()
 )
 
-# ── STEP 4: Sliding Window Chunker ──────────────────────────
+#  Sliding Window Chunker 
 def sliding_window_chunks(text: str, chunk_size: int = 400, overlap: int = 80):
     words  = text.split()
     chunks = []
@@ -69,7 +65,7 @@ def sliding_window_chunks(text: str, chunk_size: int = 400, overlap: int = 80):
         start += chunk_size - overlap
     return chunks
 
-# ── STEP 5: PDF / TXT Text Extractor ────────────────────────
+#  PDF / TXT Text Extractor
 def extract_text(filename: str, content: bytes) -> str:
     if filename.lower().endswith(".pdf"):
         reader = pypdf.PdfReader(io.BytesIO(content))
@@ -80,7 +76,7 @@ def extract_text(filename: str, content: bytes) -> str:
     except UnicodeDecodeError:
         return content.decode("latin-1")
 
-# ── STEP 6: Document Indexer ────────────────────────────────
+#  Document Indexer 
 indexed_doc_names = []
 
 def index_documents(files_dict: dict) -> str:
@@ -114,7 +110,7 @@ def index_documents(files_dict: dict) -> str:
     )
     return f"✅ Indexed {len(documents)} chunks from {len(files_dict)} file(s)."
 
-# ── STEP 7: Hybrid Retriever + Cohere Reranker ──────────────
+# Hybrid Retriever + Cohere Reranker 
 def retrieve_and_rerank(query: str, top_k: int = 3) -> list:
     raw = qdrant.query(
         collection_name=COLLECTION_NAME,
@@ -135,7 +131,7 @@ def retrieve_and_rerank(query: str, top_k: int = 3) -> list:
 
     return [raw[hit.index].metadata for hit in reranked.results]
 
-# ── STEP 8: Gemini Answer Generator with Retry + Fallback ───
+#  Gemini Answer Generator with Retry + Fallback 
 def generate_answer(query: str, context_blocks: list) -> str:
     if not context_blocks:
         return "⚠️ No relevant context found. Please upload documents first."
@@ -185,8 +181,7 @@ def generate_answer(query: str, context_blocks: list) -> str:
 
     return "⚠️ All models unavailable. Please try again shortly."
 
-# ── STEP 9: RAGAS Evaluation Pipeline ───────────────────────
-# ✅ FIX: Configure RAGAS to use Gemini via LangChain, NOT Vertex AI
+# RAGAS Evaluation Pipeline 
 EVAL_LOG_FILE = "eval_results.json"
 
 def setup_ragas_llm():
@@ -214,7 +209,7 @@ def run_ragas_evaluation(test_questions: list) -> dict:
     from ragas.metrics import faithfulness, answer_relevancy, context_precision
     from datasets import Dataset
 
-    # ✅ Wire RAGAS to use Gemini
+  
     ragas_llm, ragas_emb = setup_ragas_llm()
     faithfulness.llm           = ragas_llm
     faithfulness.embeddings    = ragas_emb
@@ -261,7 +256,7 @@ def run_ragas_evaluation(test_questions: list) -> dict:
     print(f"Full scores: {scores}")
     return output
 
-# ── STEP 10: GitHub Actions CI YAML Generator ───────────────
+# GitHub Actions CI YAML Generator 
 def generate_ci_yaml():
     yaml = """# .github/workflows/eval.yml
 name: RAG Evaluation Gate
@@ -305,7 +300,7 @@ jobs:
     with open(".github/workflows/eval.yml", "w") as f:
         f.write(yaml)
 
-# ── STEP 11: Gradio UI ──────────────────────────────────────
+# Gradio UI 
 def upload_handler(files):
     if not files:
         return "No files uploaded."
@@ -404,7 +399,7 @@ with gr.Blocks(title="Ask My Docs — Production RAG", theme=gr.themes.Soft()) a
         - `GOOGLE_API_KEY`  ← your Gemini key
         """)
 
-# ── STEP 12: Launch ─────────────────────────────────────────
+#  Launch
 print("\n" + "="*60)
 print("🚀 Launching Production RAG System...")
 print("="*60 + "\n")
